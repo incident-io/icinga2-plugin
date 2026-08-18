@@ -6,7 +6,7 @@ DESTDIR     ?=
 PREFIX      ?= /usr
 ICINGA_CONF ?= /etc/icinga2
 
-.PHONY: all test lint lint-docker install uninstall deb rpm packages basket clean help
+.PHONY: all test test-posix lint lint-docker install uninstall deb rpm packages basket clean help
 
 all: help
 
@@ -14,6 +14,7 @@ help:
 	@echo "$(NAME) $(VERSION)"
 	@echo
 	@echo "  make test        run the test suite (sh, dash, bash)"
+	@echo "  make test-posix  same, with GNU sed forced into POSIX mode"
 	@echo "  make lint        shellcheck the handler and test suite"
 	@echo "  make lint-docker same, in a container (no local shellcheck)"
 	@echo "  make install     install handler + config on this master"
@@ -25,6 +26,12 @@ help:
 
 test:
 	SHELLS="sh dash bash" ./test/run-tests.sh
+
+# Approximates BSD/macOS userland on a GNU box. Only meaningful where sed is
+# GNU sed; on macOS `make test` already exercises the real thing.
+test-posix:
+	@sed --version >/dev/null 2>&1 || { echo "not GNU sed; plain 'make test' already covers this"; exit 0; }
+	PATH="$(CURDIR)/test/shims:$$PATH" SHELLS="sh dash bash" ./test/run-tests.sh
 
 SHELL_SOURCES := bin/incident-io-icinga test/run-tests.sh \
                  contrib/director-basket/generate-basket.sh \

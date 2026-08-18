@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Forces GNU sed into POSIX mode, reproducing the BSD/macOS behaviour of `N`
+# at end of input: quit without printing, rather than print and quit.
+#
+# Used by `make test-posix` so a Linux CI job catches the class of bug that
+# otherwise only appears on BSD userland.
+#
+# The real sed is invoked by absolute path: this shim's directory is prepended
+# to PATH, so resolving "sed" by name would re-enter this script.
+for real in /usr/bin/sed /bin/sed /usr/local/bin/sed; do
+  [ -x "$real" ] && exec "$real" --posix "$@"
+done
+echo "shim: no system sed found" >&2
+exit 127

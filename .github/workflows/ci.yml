@@ -20,6 +20,17 @@ jobs:
       - name: Test across shells
         run: SHELLS="sh dash bash ksh" ./test/run-tests.sh
 
+      - name: Test with sed in POSIX mode
+        run: make test-posix
+
+      - name: Test against mawk and busybox awk
+        run: |
+          for a in mawk "busybox awk"; do
+            d=$(mktemp -d); printf '#!/bin/sh\nexec %s "$@"\n' "$a" > "$d/awk"
+            chmod +x "$d/awk"
+            PATH="$d:$PATH" SHELLS="sh" ./test/run-tests.sh
+          done
+
   # GNU userland would not have caught the sed N-at-EOF portability bug.
   test-bsd-userland:
     runs-on: macos-latest

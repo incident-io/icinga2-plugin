@@ -4,7 +4,7 @@
 #
 # Part of https://github.com/incident-io/icinga2
 #
-# Dependencies: POSIX sh, sed, tr, awk, curl, mktemp.
+# Dependencies: POSIX sh, sed, tr, awk, od, curl, mktemp.
 #
 # Invoked by the "incident-io" NotificationCommand; all input arrives as
 # environment variables. See conf.d/incident-io-command.conf.
@@ -92,11 +92,26 @@ json_escape() {
 }
 
 # URL-encode using curl itself, so we take on no new dependency.
-# curl 8 rejects an empty URL argument, so encode against a dummy host and
-# strip it back off.
+# Percent-encode per RFC 3986.
+#
+# Not delegated to curl: curl's hex casing varies by version (7.x uppercase,
+# 8.x lowercase) and curl 8 rejects an empty URL argument, so the output was
+# neither stable nor testable. od gives us the bytes, awk maps unreserved ones
+# back to ASCII and encodes the rest. Bytes above 0x7f are encoded
+# individually, which is correct for UTF-8 host and service names.
 urlencode() {
-  curl -Gso /dev/null -w '%{url_effective}' --data-urlencode "=${1:-}" "http://x/" \
-    | sed -e 's|^http://x/?\{0,1\}||'
+  printf '%s' "${1:-}" | od -An -v -tx1 | awk '
+    BEGIN {
+      for (i = 32; i < 127; i++) chr[sprintf("%02x", i)] = sprintf("%c", i)
+      ORS = ""
+    }
+    {
+      for (i = 1; i <= NF; i++) {
+        c = chr[$i]
+        if (c != "" && c ~ /^[A-Za-z0-9._~-]$/) printf "%s", c
+        else printf "%%%s", toupper($i)
+      }
+    }'
 }
 
 # ---------------------------------------------------------------------------

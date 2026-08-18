@@ -144,7 +144,14 @@ line two
     ICINGAWEB_URL='https://icinga.example.com/icingaweb2/' \
     "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'source_url is url-encoded' "d['source_url']" \
-    'https://icinga.example.com/icingaweb2/icingadb/service?name=disk+%2F&host.name=web+01'
+    'https://icinga.example.com/icingaweb2/icingadb/service?name=disk%20%2F&host.name=web%2001'
+
+  PAYLOAD=$(env HOST_NAME='münchen-01' SERVICE_NAME='café' STATE=CRITICAL \
+    NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
+    ICINGAWEB_URL='https://icinga.example.com/icingaweb2' \
+    "$SH" "$HANDLER" --dry-run)
+  assert "$SH" 'source_url encodes utf-8 per byte' "d['source_url']" \
+    'https://icinga.example.com/icingaweb2/icingadb/service?name=caf%C3%A9&host.name=m%C3%BCnchen-01'
 
   PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x "$SH" "$HANDLER" --dry-run)
