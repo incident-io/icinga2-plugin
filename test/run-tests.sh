@@ -46,14 +46,19 @@ assert_valid_json() {
   fi
 }
 
-BASE_ENV="INCIDENT_IO_URL=https://example.invalid/alert INCIDENT_IO_TOKEN=test-token"
+# Constant for every case, so export rather than passing through env - an
+# unquoted "$BASE_ENV" would rely on word splitting, which shellcheck flags
+# and which breaks on any value containing a space.
+INCIDENT_IO_URL="https://example.invalid/alert"
+INCIDENT_IO_TOKEN="test-token"
+export INCIDENT_IO_URL INCIDENT_IO_TOKEN
 
 run_suite() {
   SH="$1"
   printf '\n== %s ==\n' "$SH"
 
   # -- 1. hostile characters in output and service name -------------------
-  PAYLOAD=$(env $BASE_ENV \
+  PAYLOAD=$(env \
     HOST_NAME='web-01.dc-fra' \
     SERVICE_NAME='disk C:\ "root"' \
     STATE='CRITICAL' \
@@ -75,7 +80,7 @@ line two
   assert "$SH" 'carries check_source' "d['metadata']['check_source']" 'satellite-fra-1'
 
   # -- 2. host notification, recovery -------------------------------------
-  PAYLOAD=$(env -u SERVICE_NAME $BASE_ENV \
+  PAYLOAD=$(env -u SERVICE_NAME \
     HOST_NAME='db-02' STATE='UP' NOTIFICATION_TYPE='RECOVERY' \
     OUTPUT='PING OK - Packet loss = 0%, RTA = 0.42 ms' \
     "$SH" "$HANDLER" --dry-run)
@@ -89,13 +94,13 @@ line two
               'DOWNTIMESTART resolved' 'DOWNTIMEEND firing' \
               'FLAPPINGSTART firing' 'FLAPPINGEND resolved'; do
     t=${pair% *}; want=${pair#* }
-    PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+    PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
       NOTIFICATION_TYPE="$t" OUTPUT=x "$SH" "$HANDLER" --dry-run)
     assert "$SH" "status mapping $t" "d['status']" "$want"
   done
 
   # -- 4. flexible metadata: nested objects, arrays, numbers, booleans -----
-  PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
     INCIDENT_IO_METADATA_JSON='{"team":"payments","tier":1,"oncall":true,"hostgroups":["prod","linux"],"owner":{"squad":"core","slack":"#pay-alerts"}}' \
     "$SH" "$HANDLER" --dry-run)
@@ -109,7 +114,7 @@ line two
   assert "$SH" 'metadata: built-ins survive'   "d['metadata']['source']" 'icinga'
 
   # -- 5. metadata with hostile values ------------------------------------
-  PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
     INCIDENT_IO_METADATA_JSON='{"note":"has \"quotes\" and a \\ backslash","path":"C:\\Windows"}' \
     "$SH" "$HANDLER" --dry-run)
@@ -119,7 +124,7 @@ line two
     "d['metadata']['note']" 'has "quotes" and a \ backslash'
 
   # -- 6. operator keys override built-ins --------------------------------
-  PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
     INCIDENT_IO_METADATA_JSON='{"source":"icinga-eu"}' \
     "$SH" "$HANDLER" --dry-run)
@@ -127,26 +132,26 @@ line two
 
   # -- 7. malformed / empty metadata is survivable ------------------------
   for bad in '' '{}' 'null' 'not json at all' '["an","array"]'; do
-    PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+    PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
       NOTIFICATION_TYPE=PROBLEM OUTPUT=x INCIDENT_IO_METADATA_JSON="$bad" \
       "$SH" "$HANDLER" --dry-run 2>/dev/null)
     assert_valid_json "$SH"
   done
 
   # -- 8. source_url ------------------------------------------------------
-  PAYLOAD=$(env $BASE_ENV HOST_NAME='web 01' SERVICE_NAME='disk /' STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME='web 01' SERVICE_NAME='disk /' STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
     ICINGAWEB_URL='https://icinga.example.com/icingaweb2/' \
     "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'source_url is url-encoded' "d['source_url']" \
     'https://icinga.example.com/icingaweb2/icingadb/service?name=disk+%2F&host.name=web+01'
 
-  PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'source_url empty without base' "d['source_url']" ''
 
   # -- 9. acknowledgement comment ----------------------------------------
-  PAYLOAD=$(env $BASE_ENV HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=ACKNOWLEDGEMENT NOTIFICATION_AUTHOR=rloffelmacher \
     NOTIFICATION_COMMENT='looking into it' OUTPUT='CRITICAL - 100% packet loss' \
     "$SH" "$HANDLER" --dry-run)

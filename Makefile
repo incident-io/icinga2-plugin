@@ -6,7 +6,7 @@ DESTDIR     ?=
 PREFIX      ?= /usr
 ICINGA_CONF ?= /etc/icinga2
 
-.PHONY: all test lint install uninstall deb rpm packages basket clean help
+.PHONY: all test lint lint-docker install uninstall deb rpm packages basket clean help
 
 all: help
 
@@ -15,6 +15,7 @@ help:
 	@echo
 	@echo "  make test        run the test suite (sh, dash, bash)"
 	@echo "  make lint        shellcheck the handler and test suite"
+	@echo "  make lint-docker same, in a container (no local shellcheck)"
 	@echo "  make install     install handler + config on this master"
 	@echo "  make uninstall   remove them again"
 	@echo "  make deb         build a .deb  (needs fpm)"
@@ -25,8 +26,16 @@ help:
 test:
 	SHELLS="sh dash bash" ./test/run-tests.sh
 
+SHELL_SOURCES := bin/incident-io-icinga test/run-tests.sh \
+                 contrib/director-basket/generate-basket.sh \
+                 build-linux/make_package.sh build-linux/build-in-docker.sh
+
 lint:
-	shellcheck -s sh bin/incident-io-icinga test/run-tests.sh contrib/director-basket/generate-basket.sh
+	shellcheck -s sh $(SHELL_SOURCES)
+
+lint-docker:
+	docker run --rm -v "$(CURDIR):/mnt" -w /mnt koalaman/shellcheck:stable \
+	  -s sh $(SHELL_SOURCES)
 
 # Installs into the master zone so Icinga's config sync distributes the .conf
 # files to the other masters. The handler itself must be installed on each
