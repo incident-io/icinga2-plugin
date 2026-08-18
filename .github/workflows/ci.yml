@@ -51,14 +51,19 @@ jobs:
       - name: Test against BSD sed, awk and tr
         run: SHELLS="sh bash" ./test/run-tests.sh
 
-  # Builds on every push and PR; additionally publishes a GitHub release when the
-  # ref is a v* tag. Because this job needs both test jobs, a tag whose tests
-  # fail never produces a release.
+  # Builds on every push and PR. On a v* tag it publishes a GitHub release; on a
+  # push to main it refreshes the rolling "edge" prerelease. Because this job
+  # needs both test jobs, neither happens unless the tests passed.
   package:
     runs-on: ubuntu-latest
     needs: [test, test-bsd-userland]
     permissions:
       contents: write
+    # Two merges to main in quick succession would otherwise race to replace the
+    # edge release. Queue instead of cancelling, so the last push still wins.
+    concurrency:
+      group: package-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
 
@@ -73,6 +78,20 @@ jobs:
             echo "tag v$tag does not match VERSION ($file)" >&2
             exit 1
           fi
+
+      # Tip of main is a pre-release of the version being worked toward, so it is
+      # stamped VERSION~git<date>.<sha>. "~" sorts before the plain version in
+      # both dpkg and rpm, so an edge install upgrades cleanly once that version
+      # is tagged. Tags and PRs build the VERSION file as-is.
+      - name: Choose package version
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            v="$(cat VERSION)~git$(date -u +%Y%m%d).$(git rev-parse --short HEAD)"
+          else
+            v=$(cat VERSION)
+          fi
+          echo "PKG_VERSION=$v" >> "$GITHUB_ENV"
+          echo "building $v"
 
       - name: Install fpm
         run: sudo gem install --no-document fpm
@@ -111,3 +130,31 @@ jobs:
             echo "no CHANGELOG section for $tag, generating notes from commits" >&2
             gh release create "$tag" dist/* --title "$tag" --generate-notes
           fi
+
+      # A single release named "edge" whose tag is moved to whatever main points
+      # at. Marked prerelease so GitHub never shows it as "Latest", and so the
+      # newest real tag keeps that badge.
+      - name: Refresh the edge release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          Rolling build of the tip of \`main\`, replaced on every merge. Not a
+          stable release.
+
+          Packages here are versioned \`$PKG_VERSION\`, which sorts before
+          \`$(cat VERSION)\` for both dpkg and rpm, so installing from edge still
+          upgrades cleanly once that version is tagged.
+
+          Built from $GITHUB_SHA.
+          EOF
+          sed -i 's/^          //' "$notes"
+
+          gh release delete edge --yes --cleanup-tag || true
+          gh release create edge dist/* \
+            --target "$GITHUB_SHA" \
+            --title "edge (tip of main)" \
+            --prerelease \
+            --notes-file "$notes"

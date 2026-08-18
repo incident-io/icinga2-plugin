@@ -18,7 +18,11 @@ esac
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "$HERE"
 
-VERSION=$(cat VERSION)
+# PKG_VERSION overrides the VERSION file, so CI can stamp a build from tip of
+# main as a pre-release of the version being worked toward. A "~" sorts before
+# the plain version in both dpkg and rpm, so 0.1.0~git... upgrades cleanly to
+# 0.1.0 once that is tagged.
+VERSION="${PKG_VERSION:-$(cat VERSION)}"
 STAGE="build/stage"
 OUT="dist"
 
