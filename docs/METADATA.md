@@ -151,6 +151,13 @@ Because Icinga has already produced valid JSON, the handler splices it into the
 payload verbatim rather than parsing it. Arbitrary nesting therefore works
 without a JSON library in the shell.
 
+One wrinkle: Icinga runs macro resolution over the value it substitutes into the
+`env` block, so a metadata value that looks like a macro would be expanded a
+second time, and `$host.name$` stored in a custom variable would arrive as the
+host's name. The function therefore escapes every `$` as `$$` before returning,
+and Icinga's own unescaping restores the original text. Your values reach
+incident.io exactly as you wrote them, including literal dollar signs.
+
 The handler validates only the shape: the value must be a JSON object under
 32 KB. If it is not, the handler logs a warning and sends the alert without the
 additional metadata rather than failing the alert.
@@ -158,14 +165,20 @@ additional metadata rather than failing the alert.
 ## Checking your work
 
 `icinga2 console` evaluates the function against real objects without sending
-anything:
+anything, but it has to be pointed at the running daemon with `--connect`. A
+bare `icinga2 console` does not load your configuration, so the function is not
+defined and the call fails with `Argument is not a callable object`.
 
 ```
-$ icinga2 console
+$ icinga2 console --connect 'https://myuser:mypass@localhost:5665/'
 <1> => var h = get_host("web-01.dc-fra")
 <2> => incident_io_metadata(h, null)
 "{\"hostgroups\":[\"linux\",\"prod\"],\"datacenter\":\"fra\",\"team\":\"payments\"}"
 ```
+
+This needs the `api` feature enabled and an `ApiUser` holding the `console`
+permission. Values containing a literal `$` appear here with the dollar doubled,
+for the reason given above; that doubling is undone before the handler sees it.
 
 To see a whole payload, run the handler by hand:
 
