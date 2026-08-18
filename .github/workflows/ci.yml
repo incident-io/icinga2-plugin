@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shells
+        run: sudo apt-get update && sudo apt-get install -y dash ksh shellcheck
+
+      - name: Shellcheck
+        run: make lint
+
+      - name: Test across shells
+        run: SHELLS="sh dash bash ksh" ./test/run-tests.sh
+
+  package:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install fpm
+        run: sudo gem install --no-document fpm
+
+      - name: Build deb
+        run: ./build-linux/make_package.sh deb
+
+      - name: Build rpm
+        run: sudo apt-get update && sudo apt-get install -y rpm && ./build-linux/make_package.sh rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*

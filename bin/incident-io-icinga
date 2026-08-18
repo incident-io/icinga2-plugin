@@ -1,0 +1,243 @@
+#!/bin/sh
+#
+# incident-io-icinga - forward Icinga 2 notifications to an incident.io alert source
+#
+# Part of https://github.com/incident-io/icinga2
+#
+# Dependencies: POSIX sh, sed, tr, curl, mktemp. Deliberately no jq, perl or
+# python - Icinga masters in locked-down estates often have none of them.
+#
+# Invoked by the "incident-io" NotificationCommand; all input arrives as
+# environment variables. See conf.d/incident-io-command.conf.
+#
+# Exit codes:  0 delivered   1 delivery failed   2 configuration error
+
+set -eu
+
+VERSION="1.0.0"
+LOG_TAG="incident-io-icinga"
+
+usage() {
+  cat <<USAGE
+incident-io-icinga ${VERSION}
+
+Normally invoked by Icinga 2, not by hand. Input comes from the environment.
+
+  --dry-run     Build the payload and print it to stdout; send nothing.
+  --version     Print version and exit.
+  --help        This message.
+
+Environment (set by the NotificationCommand):
+  INCIDENT_IO_URL             Alert source URL                        (required)
+  INCIDENT_IO_TOKEN           Alert source bearer token               (required)
+  HOST_NAME                   Icinga host object name                 (required)
+  SERVICE_NAME                Icinga service name; empty = host alert
+  STATE, OUTPUT, CHECK_SOURCE Check state, plugin output, executing node
+  NOTIFICATION_TYPE           PROBLEM, RECOVERY, ACKNOWLEDGEMENT, ...
+  NOTIFICATION_AUTHOR         Author of ack/custom notification
+  NOTIFICATION_COMMENT        Comment on ack/custom notification
+  INCIDENT_IO_METADATA_JSON   JSON object merged into "metadata"
+  ICINGAWEB_URL               Icinga Web 2 base URL, for source_url
+USAGE
+}
+
+DRY_RUN=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    --version) echo "$VERSION"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "$LOG_TAG: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+log() {
+  level="$1"; shift
+  logger -t "$LOG_TAG" -p "user.${level}" "$*" 2>/dev/null || true
+  [ "$level" = "err" ] || [ "$level" = "warning" ] && echo "$LOG_TAG: $*" >&2
+  return 0
+}
+
+die() { log err "$*"; exit "${2:-1}"; }
+
+# ---------------------------------------------------------------------------
+# Configuration checks. Exit 2 (not 1) so a misconfiguration is distinguishable
+# from a transient delivery failure in Icinga's logs.
+# ---------------------------------------------------------------------------
+[ -n "${INCIDENT_IO_URL:-}" ]   || die "INCIDENT_IO_URL is not set - see conf.d/incident-io-secrets.conf.example" 2
+[ -n "${INCIDENT_IO_TOKEN:-}" ] || die "INCIDENT_IO_TOKEN is not set - see conf.d/incident-io-secrets.conf.example" 2
+[ -n "${HOST_NAME:-}" ]         || die "HOST_NAME is not set - check the NotificationCommand env block" 2
+
+# ---------------------------------------------------------------------------
+# JSON string escaping without jq.
+#
+#   1. tabs -> spaces
+#   2. drop remaining control characters (JSON forbids them unescaped)
+#   3. escape backslash first, then double quote - order matters
+#   4. fold onto one line, real newlines becoming \n
+#
+# Icinga plugin output routinely contains quotes, Windows paths and multi-line
+# perfdata, so every step here earns its keep.
+# ---------------------------------------------------------------------------
+json_escape() {
+  printf '%s' "${1:-}" \
+    | tr '\011' ' ' \
+    | tr -d '\000-\010\013-\037\177' \
+    | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
+    | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g'
+}
+
+# URL-encode using curl itself, so we take on no new dependency.
+urlencode() {
+  curl -Gso /dev/null -w '%{url_effective}' --data-urlencode "=${1:-}" "" \
+    | sed -e 's|^/?||'
+}
+
+# ---------------------------------------------------------------------------
+# Notification type -> alert status.
+#
+# DOWNTIMESTART resolves, so planned maintenance does not leave an alert open.
+# DOWNTIMEEND re-fires; if the object recovered during the window Icinga simply
+# never sends it.
+# ---------------------------------------------------------------------------
+case "${NOTIFICATION_TYPE:-PROBLEM}" in
+  PROBLEM|FLAPPINGSTART|CUSTOM|ACKNOWLEDGEMENT|DOWNTIMEEND|DOWNTIMEREMOVED)
+    STATUS="firing" ;;
+  RECOVERY|FLAPPINGEND|DOWNTIMESTART)
+    STATUS="resolved" ;;
+  *)
+    log warning "unrecognised NOTIFICATION_TYPE '${NOTIFICATION_TYPE:-}', treating as firing"
+    STATUS="firing" ;;
+esac
+
+# ---------------------------------------------------------------------------
+# Title, dedup key and source URL.
+#
+# The dedup key must be byte-identical between a PROBLEM and its RECOVERY, and
+# identical on both HA masters - so it derives only from object names. Never put
+# a timestamp, state or sending hostname in it.
+# ---------------------------------------------------------------------------
+if [ -n "${SERVICE_NAME:-}" ]; then
+  TITLE="${SERVICE_NAME} on ${HOST_NAME} is ${STATE:-UNKNOWN}"
+  DEDUP="icinga/${HOST_NAME}/${SERVICE_NAME}"
+else
+  TITLE="${HOST_NAME} is ${STATE:-UNKNOWN}"
+  DEDUP="icinga/${HOST_NAME}/_host"
+fi
+
+SOURCE_URL=""
+if [ -n "${ICINGAWEB_URL:-}" ]; then
+  BASE=$(printf '%s' "$ICINGAWEB_URL" | sed -e 's|/*$||')
+  if [ -n "${SERVICE_NAME:-}" ]; then
+    SOURCE_URL="${BASE}/icingadb/service?name=$(urlencode "$SERVICE_NAME")&host.name=$(urlencode "$HOST_NAME")"
+  else
+    SOURCE_URL="${BASE}/icingadb/host?name=$(urlencode "$HOST_NAME")"
+  fi
+fi
+
+DESCRIPTION="${OUTPUT:-No check output}"
+if [ -n "${NOTIFICATION_COMMENT:-}" ]; then
+  DESCRIPTION="${DESCRIPTION}
+
+${NOTIFICATION_TYPE:-NOTIFICATION} by ${NOTIFICATION_AUTHOR:-unknown}: ${NOTIFICATION_COMMENT}"
+fi
+
+# ---------------------------------------------------------------------------
+# Operator-supplied metadata.
+#
+# INCIDENT_IO_METADATA_JSON arrives as a complete JSON object, produced by
+# Icinga's own Json.encode() in the DSL (see conf.d/incident-io-command.conf).
+# Because it is already valid JSON we splice it in verbatim rather than trying
+# to parse it - which is what makes arbitrary nested metadata possible without
+# jq. We validate the shape and cap the size, but not the contents.
+#
+# Operator keys are emitted last, so they override the built-ins on collision.
+# ---------------------------------------------------------------------------
+MAX_METADATA_BYTES=32768
+EXTRA_INNER=""
+EXTRA_RAW="${INCIDENT_IO_METADATA_JSON:-}"
+
+if [ -n "$EXTRA_RAW" ]; then
+  if [ "$(printf '%s' "$EXTRA_RAW" | wc -c)" -gt "$MAX_METADATA_BYTES" ]; then
+    log warning "metadata exceeds ${MAX_METADATA_BYTES} bytes, dropping it"
+  else
+    case "$EXTRA_RAW" in
+      '{}'|'null'|'') ;;
+      '{'*'}')
+        EXTRA_INNER=$(
+          printf '%s' "$EXTRA_RAW" \
+            | tr -d '\000-\010\013-\037\177' \
+            | sed -e 's/^[[:space:]]*{//' -e 's/}[[:space:]]*$//'
+        )
+        # Guard against a dict that was only whitespace inside the braces.
+        case "$(printf '%s' "$EXTRA_INNER" | tr -d '[:space:]')" in
+          '') EXTRA_INNER="" ;;
+        esac
+        ;;
+      *)
+        log warning "INCIDENT_IO_METADATA_JSON is not a JSON object, ignoring it"
+        ;;
+    esac
+  fi
+fi
+
+METADATA=$(printf '"host":"%s","service":"%s","state":"%s","notification_type":"%s","check_source":"%s","source":"icinga"' \
+  "$(json_escape "$HOST_NAME")" \
+  "$(json_escape "${SERVICE_NAME:-}")" \
+  "$(json_escape "${STATE:-}")" \
+  "$(json_escape "${NOTIFICATION_TYPE:-}")" \
+  "$(json_escape "${CHECK_SOURCE:-}")")
+
+if [ -n "$EXTRA_INNER" ]; then
+  METADATA="${METADATA},${EXTRA_INNER}"
+fi
+
+BODY=$(printf '{"title":"%s","description":"%s","deduplication_key":"%s","status":"%s","source_url":"%s","metadata":{%s}}' \
+  "$(json_escape "$TITLE")" \
+  "$(json_escape "$DESCRIPTION")" \
+  "$(json_escape "$DEDUP")" \
+  "$STATUS" \
+  "$(json_escape "$SOURCE_URL")" \
+  "$METADATA")
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf '%s\n' "$BODY"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Deliver. Icinga does not retry notification commands, so retry here.
+# ---------------------------------------------------------------------------
+RESPONSE_FILE=$(mktemp "${TMPDIR:-/tmp}/incident-io.XXXXXX")
+trap 'rm -f "$RESPONSE_FILE"' EXIT INT TERM
+
+HTTP_CODE=$(
+  printf '%s' "$BODY" | curl -sS \
+    -o "$RESPONSE_FILE" \
+    -w '%{http_code}' \
+    -X POST "$INCIDENT_IO_URL" \
+    -H "Authorization: Bearer ${INCIDENT_IO_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: incident-io-icinga/${VERSION}" \
+    --retry 3 \
+    --retry-delay 2 \
+    --retry-connrefused \
+    --max-time 15 \
+    --data-binary @- \
+  || echo "000"
+)
+
+case "$HTTP_CODE" in
+  2*)
+    log info "delivered ${STATUS} for ${DEDUP} (HTTP ${HTTP_CODE})"
+    ;;
+  000)
+    die "could not reach ${INCIDENT_IO_URL} for ${DEDUP} - check egress from this master"
+    ;;
+  401|403)
+    die "rejected for ${DEDUP}: HTTP ${HTTP_CODE} - check INCIDENT_IO_TOKEN matches the alert source" 2
+    ;;
+  *)
+    die "failed to deliver ${STATUS} for ${DEDUP}: HTTP ${HTTP_CODE}: $(tr -d '\n' < "$RESPONSE_FILE" | cut -c1-500)"
+    ;;
+esac
