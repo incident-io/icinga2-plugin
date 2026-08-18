@@ -202,11 +202,10 @@ Community-supported and exercised against Director 1.10 only.
 ## Development
 
 ```sh
-make test     # 107 assertions across sh, dash and bash
+make test     # 122 assertions across sh, dash, bash and ksh
 make lint     # shellcheck
 make deb      # build .deb (requires fpm)
 make rpm      # build .rpm (requires fpm)
-make packages # build both in Docker
 ```
 
 Tests run the handler in `--dry-run` and assert on the resulting payload. No

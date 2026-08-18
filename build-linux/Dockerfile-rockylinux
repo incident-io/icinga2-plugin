@@ -1,5 +1,0 @@
-FROM rockylinux:9
-RUN dnf -y install ruby ruby-devel gcc make rpm-build curl python3 \
- && gem install --no-document fpm \
- && dnf clean all
-WORKDIR /src
