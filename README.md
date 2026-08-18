@@ -4,11 +4,13 @@ Sends Icinga 2 host and service notifications to an incident.io HTTP alert
 source, and resolves them on recovery.
 
 > [!WARNING]
-> **Beta.** The Icinga configuration in `conf.d/` has not yet been evaluated by
-> a live Icinga 2 master — `icinga2 daemon -C` is the first thing to run after
-> installing. The handler and its payload are well covered by tests, and the
-> request schema is verified against the incident.io alert events API, but the
-> DSL is not. Test in a non-production zone first.
+> **Beta.** The configuration in `conf.d/` is now exercised end to end against a
+> single-node Icinga 2.16.5: it passes `icinga2 daemon -C`, generates the
+> expected `Notification` objects, and delivers PROBLEM and RECOVERY alerts
+> carrying the metadata the objects were configured with. It also parses on
+> 2.12.12. What has *not* been verified is distributed operation: satellite
+> `check_source` values, zone config sync, and notification failover between HA
+> masters. Test in a non-production zone first.
 
 ## Requirements
 
