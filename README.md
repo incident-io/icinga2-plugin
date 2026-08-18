@@ -15,7 +15,7 @@ source, and resolves them on recovery.
 | | |
 | --- | --- |
 | Icinga 2 | 2.11 or newer |
-| On each master | `curl`, POSIX `/bin/sh` |
+| On each master | POSIX `/bin/sh`, `curl`, `sed`, `awk`, `tr` |
 | Network | outbound HTTPS from each master to `api.incident.io` |
 
 No `jq`, Perl or Python dependency.

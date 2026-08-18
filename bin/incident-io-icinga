@@ -4,7 +4,7 @@
 #
 # Part of https://github.com/incident-io/icinga2
 #
-# Dependencies: POSIX sh, sed, tr, curl, mktemp.
+# Dependencies: POSIX sh, sed, tr, awk, curl, mktemp.
 #
 # Invoked by the "incident-io" NotificationCommand; all input arrives as
 # environment variables. See conf.d/incident-io-command.conf.
@@ -73,7 +73,12 @@ die() { log err "$*"; exit "${2:-1}"; }
 #   1. tabs -> spaces
 #   2. drop remaining control characters (JSON forbids them unescaped)
 #   3. escape backslash first, then double quote - order matters
-#   4. fold onto one line, real newlines becoming \n
+#   4. join lines with a literal \n, using awk
+#
+# Step 4 uses awk rather than the usual `sed -e ':a' -e 'N' -e '$!ba'` slurp.
+# On single-line input that sed idiom relies on a GNU extension: POSIX and BSD
+# sed quit without printing when N has no next line, so it returns an empty
+# string on macOS and the BSDs. awk behaves identically everywhere.
 #
 # Plugin output may contain quotes, backslashes and newlines, all of which are
 # invalid unescaped inside a JSON string.
@@ -83,13 +88,15 @@ json_escape() {
     | tr '\011' ' ' \
     | tr -d '\000-\010\013-\037\177' \
     | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
-    | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g'
+    | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'
 }
 
 # URL-encode using curl itself, so we take on no new dependency.
+# curl 8 rejects an empty URL argument, so encode against a dummy host and
+# strip it back off.
 urlencode() {
-  curl -Gso /dev/null -w '%{url_effective}' --data-urlencode "=${1:-}" "" \
-    | sed -e 's|^/?||'
+  curl -Gso /dev/null -w '%{url_effective}' --data-urlencode "=${1:-}" "http://x/" \
+    | sed -e 's|^http://x/?\{0,1\}||'
 }
 
 # ---------------------------------------------------------------------------

@@ -20,9 +20,17 @@ jobs:
       - name: Test across shells
         run: SHELLS="sh dash bash ksh" ./test/run-tests.sh
 
+  # GNU userland would not have caught the sed N-at-EOF portability bug.
+  test-bsd-userland:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test against BSD sed, awk and tr
+        run: SHELLS="sh bash" ./test/run-tests.sh
+
   package:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, test-bsd-userland]
     steps:
       - uses: actions/checkout@v4
 

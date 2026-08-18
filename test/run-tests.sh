@@ -150,7 +150,21 @@ line two
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'source_url empty without base' "d['source_url']" ''
 
-  # -- 9. acknowledgement comment ----------------------------------------
+  # -- 9. single-line values survive escaping -----------------------------
+  #
+  # Regression: the previous json_escape ended with a `sed -e ':a' -e 'N'`
+  # slurp, which returns an empty string on POSIX and BSD sed when the input
+  # is a single line. Every escaped field came back empty on macOS.
+  PAYLOAD=$(env HOST_NAME='single-line-host' SERVICE_NAME='single-line-svc' \
+    STATE=CRITICAL NOTIFICATION_TYPE=PROBLEM CHECK_SOURCE='sat-1' \
+    OUTPUT='one line only' "$SH" "$HANDLER" --dry-run)
+
+  assert "$SH" 'single-line host survives'    "d['metadata']['host']" 'single-line-host'
+  assert "$SH" 'single-line service survives' "d['metadata']['service']" 'single-line-svc'
+  assert "$SH" 'single-line output survives'  "d['description']" 'one line only'
+  assert "$SH" 'single-line title survives'   "d['title']" 'single-line-svc on single-line-host is CRITICAL'
+
+  # -- 10. acknowledgement comment ---------------------------------------
   PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
     NOTIFICATION_TYPE=ACKNOWLEDGEMENT NOTIFICATION_AUTHOR=rloffelmacher \
     NOTIFICATION_COMMENT='looking into it' OUTPUT='CRITICAL - 100% packet loss' \
