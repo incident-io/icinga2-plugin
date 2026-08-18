@@ -19,7 +19,7 @@ jobs:
         run: |
           missing=0
           for f in bin/incident-io-icinga test/run-tests.sh test/shims/sed \
-                   build-linux/make_package.sh build-linux/build-in-docker.sh \
+                   build-linux/make_package.sh \
                    build-linux/postinst contrib/director-basket/generate-basket.sh; do
             mode=$(git ls-files -s "$f" | awk '{print $1}')
             [ "$mode" = "100755" ] || { echo "$f is $mode, expected 100755"; missing=1; }
@@ -101,6 +101,26 @@ jobs:
 
       - name: Build rpm
         run: sudo apt-get update && sudo apt-get install -y rpm && make rpm
+
+      # Building a package only proves fpm ran. Install each one and check the
+      # files land where the config expects and the handler executes, so a bad
+      # --config-files path or a missing dependency fails here rather than on
+      # someone's master.
+      - name: Install the built packages
+        run: |
+          docker run --rm -v "$PWD/dist:/d:ro" debian:12 sh -c '
+            set -e
+            apt-get update -qq
+            apt-get install -y -qq /d/*.deb
+            /usr/bin/incident-io-icinga --version
+            test -f /etc/icinga2/conf.d/incident-io-command.conf
+            test -f /etc/icinga2/conf.d/incident-io-notifications.conf'
+          docker run --rm -v "$PWD/dist:/d:ro" rockylinux:9 sh -c '
+            set -e
+            dnf install -y -q /d/*.rpm
+            /usr/bin/incident-io-icinga --version
+            test -f /etc/icinga2/conf.d/incident-io-command.conf
+            test -f /etc/icinga2/conf.d/incident-io-notifications.conf'
 
       - uses: actions/upload-artifact@v7
         with:

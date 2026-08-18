@@ -6,7 +6,7 @@ DESTDIR     ?=
 PREFIX      ?= /usr
 ICINGA_CONF ?= /etc/icinga2
 
-.PHONY: all test test-posix lint lint-docker install uninstall deb rpm packages basket clean help
+.PHONY: all test test-posix lint lint-docker install uninstall deb rpm basket clean help
 
 all: help
 
@@ -21,7 +21,6 @@ help:
 	@echo "  make uninstall   remove them again"
 	@echo "  make deb         build a .deb  (needs fpm)"
 	@echo "  make rpm         build an .rpm (needs fpm)"
-	@echo "  make packages    build both, in Docker (needs docker)"
 	@echo "  make basket      generate an Icinga Director basket JSON"
 
 test:
@@ -35,7 +34,7 @@ test-posix:
 
 SHELL_SOURCES := bin/incident-io-icinga test/run-tests.sh \
                  contrib/director-basket/generate-basket.sh \
-                 build-linux/make_package.sh build-linux/build-in-docker.sh
+                 build-linux/make_package.sh
 
 lint:
 	shellcheck -s sh $(SHELL_SOURCES)
@@ -74,9 +73,6 @@ deb:
 
 rpm:
 	sh ./build-linux/make_package.sh rpm
-
-packages:
-	sh ./build-linux/build-in-docker.sh
 
 basket:
 	sh ./contrib/director-basket/generate-basket.sh > dist/director-basket.json
