@@ -26,14 +26,13 @@ command -v fpm >/dev/null 2>&1 || { echo "fpm not found: gem install fpm" >&2; e
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/usr/bin" \
-         "$STAGE/etc/icinga2/zones.d/master" \
          "$STAGE/etc/icinga2/conf.d" \
          "$STAGE/usr/share/doc/icinga2-incident-io" \
          "$OUT"
 
 install -m 0755 bin/incident-io-icinga                  "$STAGE/usr/bin/"
-install -m 0644 conf.d/incident-io-command.conf         "$STAGE/etc/icinga2/zones.d/master/"
-install -m 0644 conf.d/incident-io-notifications.conf   "$STAGE/etc/icinga2/zones.d/master/"
+install -m 0644 conf.d/incident-io-command.conf         "$STAGE/etc/icinga2/conf.d/"
+install -m 0644 conf.d/incident-io-notifications.conf   "$STAGE/etc/icinga2/conf.d/"
 install -m 0644 conf.d/incident-io-secrets.conf.example "$STAGE/etc/icinga2/conf.d/"
 install -m 0644 README.md LICENSE                       "$STAGE/usr/share/doc/icinga2-incident-io/"
 cp -r docs                                              "$STAGE/usr/share/doc/icinga2-incident-io/"
@@ -49,8 +48,8 @@ fpm -s dir -t "$TYPE" \
   --license "MIT" \
   --architecture all \
   --depends curl \
-  --config-files /etc/icinga2/zones.d/master/incident-io-command.conf \
-  --config-files /etc/icinga2/zones.d/master/incident-io-notifications.conf \
+  --config-files /etc/icinga2/conf.d/incident-io-command.conf \
+  --config-files /etc/icinga2/conf.d/incident-io-notifications.conf \
   --config-files /etc/icinga2/conf.d/incident-io-secrets.conf.example \
   --after-install build-linux/postinst \
   --package "$OUT/" \

@@ -55,14 +55,31 @@ check_source = satellite-fra-1  ->  EU on-call
 check_source = satellite-nyc-1  ->  US on-call
 ```
 
-## Keep the token out of zones.d
+## Why everything lives in conf.d, not zones.d
 
-Put credentials in `/etc/icinga2/conf.d/incident-io-secrets.conf` on each
-master, not in `zones.d`.
+The obvious layout would put the command and apply rules in
+`/etc/icinga2/zones.d/master/` and let config sync distribute them. This
+integration does not, for two reasons.
 
-Config sync is TLS-encrypted, but it also writes synced files to
-`/var/lib/icinga2/api/zones/` on every node in the zone. Keeping the token in
-`conf.d` means it never enters the sync path at all.
+**Constants do not cross the boundary.** Configuration synced from `zones.d`
+cannot see constants defined in `conf.d` or `constants.conf`. A
+`NotificationCommand` in `zones.d` referencing `IncidentIoUrl` therefore fails
+validation. The alternative is putting the credentials in `zones.d` too, which
+writes the token to `/var/lib/icinga2/api/zones/` on every node in the zone.
+
+**Zone sync buys nothing here.** It distributes `.conf` files but not
+executables, so the handler has to be installed on every master anyway.
+Once you are installing per-master, installing the config per-master too costs
+nothing and removes the constants problem entirely.
+
+The trade-off is drift: two masters could end up with different config. Manage
+the file with the same tooling that installs the package and this does not
+arise.
+
+If you would rather use zone sync, put all four files - command,
+notifications, secrets and the constants they reference - together in
+`zones.d/master/`, and accept the token being staged under
+`/var/lib/icinga2/api/zones/` on the masters.
 
 ## Satellites running their own notification component
 

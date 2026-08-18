@@ -65,8 +65,8 @@ Installed files:
 | Path | Purpose |
 | --- | --- |
 | `/usr/bin/incident-io-icinga` | Notification handler |
-| `/etc/icinga2/zones.d/master/incident-io-command.conf` | `NotificationCommand`, contact, metadata builder |
-| `/etc/icinga2/zones.d/master/incident-io-notifications.conf` | Apply rules |
+| `/etc/icinga2/conf.d/incident-io-command.conf` | `NotificationCommand`, contact, metadata builder |
+| `/etc/icinga2/conf.d/incident-io-notifications.conf` | Apply rules |
 | `/etc/icinga2/conf.d/incident-io-secrets.conf.example` | Credentials template |
 
 ## Configuration
@@ -94,9 +94,10 @@ const IncidentIoToken        = "TOKEN"
 const IncidentIoIcingaWebUrl = "https://icinga.example.com/icingaweb2"
 ```
 
-Credentials belong in `conf.d`, not `zones.d`. Config sync writes synced files
-to `/var/lib/icinga2/api/zones/` on every node in the zone; keeping the token in
-`conf.d` keeps it off that path. See [docs/DISTRIBUTED.md](docs/DISTRIBUTED.md).
+Everything installs to `conf.d`, on every master, rather than being distributed
+by zone sync from `zones.d`. Constants defined in `conf.d` are not visible to
+configuration synced from `zones.d`, and the handler binary has to be installed
+per-master regardless. See [docs/DISTRIBUTED.md](docs/DISTRIBUTED.md).
 
 ### 3. Select objects
 

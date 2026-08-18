@@ -25,13 +25,13 @@ help:
 	@echo "  make basket      generate an Icinga Director basket JSON"
 
 test:
-	SHELLS="sh dash bash" ./test/run-tests.sh
+	SHELLS="sh dash bash" sh ./test/run-tests.sh
 
 # Approximates BSD/macOS userland on a GNU box. Only meaningful where sed is
 # GNU sed; on macOS `make test` already exercises the real thing.
 test-posix:
 	@sed --version >/dev/null 2>&1 || { echo "not GNU sed; plain 'make test' already covers this"; exit 0; }
-	PATH="$(CURDIR)/test/shims:$$PATH" SHELLS="sh dash bash" ./test/run-tests.sh
+	PATH="$(CURDIR)/test/shims:$$PATH" SHELLS="sh dash bash" sh ./test/run-tests.sh
 
 SHELL_SOURCES := bin/incident-io-icinga test/run-tests.sh \
                  contrib/director-basket/generate-basket.sh \
@@ -44,16 +44,15 @@ lint-docker:
 	docker run --rm -v "$(CURDIR):/mnt" -w /mnt koalaman/shellcheck:stable \
 	  -s sh $(SHELL_SOURCES)
 
-# Installs into the master zone so Icinga's config sync distributes the .conf
-# files to the other masters. The handler itself must be installed on each
-# master separately - zone sync moves .conf files only.
+# Installs into conf.d on this master. Deliberately not zones.d: constants
+# defined in conf.d are not visible to config synced from zones.d, and the
+# handler has to be installed per-master regardless, so zone sync buys nothing.
 install:
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 bin/incident-io-icinga $(DESTDIR)$(PREFIX)/bin/incident-io-icinga
-	install -d $(DESTDIR)$(ICINGA_CONF)/zones.d/master
-	install -m 0644 conf.d/incident-io-command.conf       $(DESTDIR)$(ICINGA_CONF)/zones.d/master/
-	install -m 0644 conf.d/incident-io-notifications.conf $(DESTDIR)$(ICINGA_CONF)/zones.d/master/
 	install -d $(DESTDIR)$(ICINGA_CONF)/conf.d
+	install -m 0644 conf.d/incident-io-command.conf       $(DESTDIR)$(ICINGA_CONF)/conf.d/
+	install -m 0644 conf.d/incident-io-notifications.conf $(DESTDIR)$(ICINGA_CONF)/conf.d/
 	install -m 0640 conf.d/incident-io-secrets.conf.example $(DESTDIR)$(ICINGA_CONF)/conf.d/
 	@echo
 	@echo "Installed. Now, on each master:"
@@ -65,22 +64,22 @@ install:
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/incident-io-icinga
-	rm -f $(DESTDIR)$(ICINGA_CONF)/zones.d/master/incident-io-command.conf
-	rm -f $(DESTDIR)$(ICINGA_CONF)/zones.d/master/incident-io-notifications.conf
+	rm -f $(DESTDIR)$(ICINGA_CONF)/conf.d/incident-io-command.conf
+	rm -f $(DESTDIR)$(ICINGA_CONF)/conf.d/incident-io-notifications.conf
 	rm -f $(DESTDIR)$(ICINGA_CONF)/conf.d/incident-io-secrets.conf.example
 	@echo "Left $(ICINGA_CONF)/conf.d/incident-io-secrets.conf in place - remove it by hand."
 
 deb:
-	./build-linux/make_package.sh deb
+	sh ./build-linux/make_package.sh deb
 
 rpm:
-	./build-linux/make_package.sh rpm
+	sh ./build-linux/make_package.sh rpm
 
 packages:
-	./build-linux/build-in-docker.sh
+	sh ./build-linux/build-in-docker.sh
 
 basket:
-	./contrib/director-basket/generate-basket.sh > dist/director-basket.json
+	sh ./contrib/director-basket/generate-basket.sh > dist/director-basket.json
 	@echo "wrote dist/director-basket.json"
 
 clean:

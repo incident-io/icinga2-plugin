@@ -17,8 +17,8 @@ Next, on THIS master:
 
 Then opt objects in with  vars.incident_io = true
 
-Remember: install this package on EVERY master in the master zone.
-Icinga's config sync distributes .conf files but not the handler binary.
+Install this package on EVERY master in the master zone. Nothing is
+distributed by zone sync: the config lives in conf.d on each master.
 
 MSG
 

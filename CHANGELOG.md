@@ -18,7 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Adds `awk` to the runtime dependencies.
+- Config now installs to `/etc/icinga2/conf.d/` rather than
+  `/etc/icinga2/zones.d/master/`. Constants defined in `conf.d` are not visible
+  to configuration synced from `zones.d`, so the previous layout would have
+  failed validation on `IncidentIoUrl`. Zone sync cannot distribute the handler
+  binary anyway, so per-master installation was already required.
+- Adds `awk` and `od` to the runtime dependencies.
 - CI now runs the suite on macOS as well as Linux.
 
 ## [0.1.0] - 2026-08-18
