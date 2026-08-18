@@ -53,8 +53,7 @@ cat <<'JSON'
       "display_name": "incident.io",
       "enable_notifications": true,
       "object_name": "incident-io",
-      "object_type": "object",
-      "period": "24x7"
+      "object_type": "object"
     }
   },
   "DataList": {
