@@ -104,9 +104,14 @@ include it.
 Check the function output directly:
 
 ```
-icinga2 console
+icinga2 console --connect 'https://myuser:mypass@localhost:5665/'
 <1> => incident_io_metadata(get_host("web-01"), null)
 ```
+
+`--connect` is required: a bare `icinga2 console` does not load your
+configuration, so the function is undefined there and you get `Argument is not a
+callable object` rather than an answer. It needs the `api` feature enabled and
+an `ApiUser` with the `console` permission.
 
 If that looks right but alerts lack the fields, look for a warning in syslog —
 the handler drops malformed or oversized metadata (over 32 KB) rather than
