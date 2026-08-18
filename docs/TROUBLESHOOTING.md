@@ -2,7 +2,7 @@
 
 ## Nothing arrives in incident.io
 
-Work down the chain — the fault is nearly always in the first two steps.
+Work down the chain in order.
 
 **1. Is Icinga firing the notification at all?**
 
@@ -53,8 +53,8 @@ check `systemctl show icinga2 -p User`.)
 
 ## `could not reach ... check egress from this master`
 
-Exit 1 with HTTP `000`: the master cannot reach `api.incident.io`. Almost always
-an egress firewall or a proxy.
+Exit 1 with HTTP `000`: the master could not reach `api.incident.io`. Check
+outbound firewall rules and proxy configuration.
 
 If you use an outbound proxy, curl honours the standard variables — add them to
 the command's `env` block in `incident-io-command.conf`:
@@ -68,9 +68,9 @@ env = {
 
 ## HTTP 401 or 403
 
-The token does not match the alert source. Note that the URL contains the alert
-source ID and the token is tied to it — copying one from a different source will
-produce exactly this. Re-copy both from the same page in incident.io.
+The token does not match the alert source. The URL contains the alert source ID
+and the token is scoped to it, so a URL and token taken from different sources
+will fail this way. Re-copy both from the same source in incident.io.
 
 ## Alerts fire but never resolve
 

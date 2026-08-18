@@ -1,53 +1,58 @@
 # incident.io for Icinga 2
 
-Forward Icinga 2 notifications to [incident.io](https://incident.io) as alerts.
+Sends Icinga 2 host and service notifications to an incident.io HTTP alert
+source, and resolves them on recovery.
 
-Icinga keeps doing what it is good at — scheduling checks, tracking state,
-handling downtimes and flapping. incident.io takes it from there: routing,
-escalation, on-call schedules and incident response.
-
-## What it does
-
-- Sends host and service notifications to an incident.io HTTP alert source.
-- Resolves alerts automatically on recovery, so nothing lingers.
-- Respects downtimes, acknowledgements and notification periods — Icinga's
-  suppression rules apply before anything is sent.
-- Attaches whatever context you want to each alert, so incident.io can route on
-  team, datacenter, tier, or any custom variable you already have. See
-  [docs/METADATA.md](docs/METADATA.md).
-- Links each alert back to the object in Icinga Web 2.
-- Works with distributed master/satellite setups, including HA master pairs,
-  without duplicate alerts. See [docs/DISTRIBUTED.md](docs/DISTRIBUTED.md).
+> [!WARNING]
+> **Beta.** This has not been validated against a production Icinga 2
+> deployment. Specifically: the DSL in `conf.d/` has never been evaluated by a
+> live master, and the request schema has not been checked against the current
+> incident.io alert events API. Interfaces may change before 1.0. Test in a
+> non-production zone first.
 
 ## Requirements
 
-- Icinga 2, version 2.11 or newer
-- `curl` on each master
-- Outbound HTTPS from each master to `api.incident.io`
+| | |
+| --- | --- |
+| Icinga 2 | 2.11 or newer |
+| On each master | `curl`, POSIX `/bin/sh` |
+| Network | outbound HTTPS from each master to `api.incident.io` |
 
-The handler is POSIX shell. It deliberately does not require `jq`, Perl or
-Python, because Icinga masters in locked-down estates frequently have none of
-them.
+No `jq`, Perl or Python dependency.
 
-## Install
+## How it works
 
-Install on **every master in your master zone**. Nothing is needed on
-satellites or agents — notifications only ever fire from the master zone.
+The integration is a `NotificationCommand` — Icinga invokes
+`/usr/bin/incident-io-icinga` when a notification fires, and the handler POSTs
+a JSON payload to your alert source.
 
-### From a package
+This has three consequences:
 
-Download the latest `.deb` or `.rpm` from
-[Releases](https://github.com/incident-io/icinga2/releases):
+1. **Masters only.** Notifications fire from the master zone, so the package is
+   installed on masters and nothing else. Satellites and agents are unaffected,
+   and only the masters need egress.
+2. **Icinga's suppression applies first.** Downtimes, acknowledgements,
+   notification periods and `times` windows are evaluated by Icinga before the
+   handler runs. Objects in downtime do not generate alerts.
+3. **Opt-in.** Installing the package changes no behaviour until objects are
+   marked with `vars.incident_io = true`.
+
+## Installation
+
+Install on every master in the master zone. Icinga's config sync distributes
+`.conf` files but not the handler binary, so each master needs the package.
+
+**Package:**
 
 ```sh
 # Debian / Ubuntu
-sudo apt install ./icinga2-incident-io_1.0.0_all.deb
+sudo apt install ./icinga2-incident-io_0.1.0_all.deb
 
 # RHEL / Rocky / SLES
-sudo rpm -i icinga2-incident-io-1.0.0-1.noarch.rpm
+sudo rpm -i icinga2-incident-io-0.1.0-1.noarch.rpm
 ```
 
-### From source
+**Source:**
 
 ```sh
 git clone https://github.com/incident-io/icinga2.git
@@ -55,23 +60,23 @@ cd icinga2
 sudo make install
 ```
 
-Either way you get:
+Installed files:
 
-```
-/usr/bin/incident-io-icinga                                  the handler
-/etc/icinga2/zones.d/master/incident-io-command.conf         command + metadata builder
-/etc/icinga2/zones.d/master/incident-io-notifications.conf   apply rules
-/etc/icinga2/conf.d/incident-io-secrets.conf.example         credentials template
-```
+| Path | Purpose |
+| --- | --- |
+| `/usr/bin/incident-io-icinga` | Notification handler |
+| `/etc/icinga2/zones.d/master/incident-io-command.conf` | `NotificationCommand`, contact, metadata builder |
+| `/etc/icinga2/zones.d/master/incident-io-notifications.conf` | Apply rules |
+| `/etc/icinga2/conf.d/incident-io-secrets.conf.example` | Credentials template |
 
-## Configure
+## Configuration
 
-### 1. Create an alert source in incident.io
+### 1. Create an alert source
 
-**Settings → Alerts → Sources → New source → HTTP.** Copy the URL and the
-bearer token it shows you.
+In incident.io: **Settings → Alerts → Sources → New source → HTTP.** Note the
+URL and bearer token.
 
-### 2. Add your credentials
+### 2. Add credentials
 
 On each master:
 
@@ -84,39 +89,30 @@ sudoedit /etc/icinga2/conf.d/incident-io-secrets.conf
 ```
 
 ```
-const IncidentIoUrl   = "https://api.incident.io/v2/alert_events/http/YOUR_SOURCE_ID"
-const IncidentIoToken = "YOUR_TOKEN"
+const IncidentIoUrl          = "https://api.incident.io/v2/alert_events/http/SOURCE_ID"
+const IncidentIoToken        = "TOKEN"
 const IncidentIoIcingaWebUrl = "https://icinga.example.com/icingaweb2"
 ```
 
-This lives in `conf.d`, not `zones.d`, on purpose — it keeps the token off the
-config-sync path. See [docs/DISTRIBUTED.md](docs/DISTRIBUTED.md).
+Credentials belong in `conf.d`, not `zones.d`. Config sync writes synced files
+to `/var/lib/icinga2/api/zones/` on every node in the zone; keeping the token in
+`conf.d` keeps it off that path. See [docs/DISTRIBUTED.md](docs/DISTRIBUTED.md).
 
-### 3. Opt objects in
-
-Alerting is opt-in, so installing this changes nothing until you say so:
+### 3. Select objects
 
 ```
 object Host "web-01.dc-fra" {
   import "generic-host"
   address = "10.0.1.4"
 
-  vars.incident_io = true      // this host and all its services
+  vars.incident_io = true      // this host and its services
 }
 ```
 
-Opt out an individual noisy service:
-
-```
-apply Service "backup-log" {
-  check_command = "backup_log"
-  vars.incident_io = false
-  assign where host.vars.incident_io
-}
-```
-
-To route everything instead, change the `assign where` lines in
-`incident-io-notifications.conf` to `assign where true`.
+To exclude a service on an otherwise included host, set
+`vars.incident_io = false` on the service. To route the entire estate, change
+the `assign where` clauses in `incident-io-notifications.conf` to
+`assign where true`.
 
 ### 4. Reload
 
@@ -124,9 +120,9 @@ To route everything instead, change the `assign where` lines in
 sudo icinga2 daemon -C && sudo systemctl reload icinga2
 ```
 
-## Verify
+## Verification
 
-Build a payload without sending it:
+Print a payload without sending it:
 
 ```sh
 INCIDENT_IO_URL=x INCIDENT_IO_TOKEN=x \
@@ -135,11 +131,14 @@ NOTIFICATION_TYPE=PROBLEM OUTPUT='DISK CRITICAL - 12% free' \
   incident-io-icinga --dry-run
 ```
 
-Then send a real one from Icinga Web 2: open any host you have opted in and
-choose **Send custom notification**. It should appear in incident.io within a
-few seconds.
+Then send a live notification from Icinga Web 2 using **Send custom
+notification** on any selected object.
 
-## What an alert looks like
+Handler output goes to syslog under the tag `incident-io-icinga`. Exit codes:
+`0` delivered, `1` delivery failed, `2` configuration error. See
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+## Payload
 
 ```json
 {
@@ -155,75 +154,76 @@ few seconds.
     "notification_type": "PROBLEM",
     "check_source": "satellite-fra-1",
     "hostgroups": ["linux", "prod"],
-    "source": "icinga",
-    "team": "payments",
-    "datacenter": "fra"
+    "source": "icinga"
   }
 }
 ```
 
-`team` and `datacenter` there are custom — anything you can express in Icinga
-config can become metadata, and incident.io can route on all of it.
-[docs/METADATA.md](docs/METADATA.md) covers the four ways to add it.
+`deduplication_key` is derived from host and service names only — never from
+state, timestamp or sending node. This is what allows a RECOVERY to resolve the
+alert its PROBLEM opened, keeps re-notifications from creating duplicates, and
+makes the key identical across HA masters.
 
-The `deduplication_key` is what makes recoveries work: the RECOVERY notification
-resolves the same alert the PROBLEM opened, and re-notifications update it
-rather than creating duplicates.
+`metadata` is extensible. Any Icinga custom variable, including nested
+dictionaries and arrays, can be attached and used for routing in incident.io.
+See [docs/METADATA.md](docs/METADATA.md).
 
-## How notification types map
+## Notification type mapping
 
-| Icinga | incident.io |
-| --- | --- |
-| `PROBLEM` | `firing` |
-| `RECOVERY` | `resolved` |
-| `ACKNOWLEDGEMENT` | `firing`, with the acknowledging user and comment in the description |
-| `FLAPPINGSTART` | `firing` |
-| `FLAPPINGEND` | `resolved` |
-| `DOWNTIMESTART` | `resolved` — planned maintenance shouldn't hold an alert open |
-| `DOWNTIMEEND` / `DOWNTIMEREMOVED` | `firing` |
-| `CUSTOM` | `firing` |
+| Icinga type | Alert status | Note |
+| --- | --- | --- |
+| `PROBLEM` | `firing` | |
+| `RECOVERY` | `resolved` | |
+| `ACKNOWLEDGEMENT` | `firing` | Author and comment appended to description |
+| `CUSTOM` | `firing` | |
+| `FLAPPINGSTART` | `firing` | |
+| `FLAPPINGEND` | `resolved` | |
+| `DOWNTIMESTART` | `resolved` | Prevents planned maintenance holding an alert open |
+| `DOWNTIMEEND` | `firing` | |
+| `DOWNTIMEREMOVED` | `firing` | |
 
 ## Icinga Director
 
-If you manage Icinga with Director, `contrib/director-basket/` generates an
-importable basket so you can create the objects through the web UI instead of
-editing files:
+`contrib/director-basket/` generates an importable basket for sites managing
+Icinga through Director:
 
 ```sh
 make basket
-# then: Director -> Configuration Baskets -> Upload
 ```
 
-You still need the package installed on each master — Director manages Icinga
-objects, not files on disk.
+Import via **Director → Configuration Baskets → Upload**. The basket creates
+Icinga objects only; the package must still be installed on each master.
+
+Community-supported and exercised against Director 1.10 only.
 
 ## Development
 
 ```sh
-make test     # run the suite against sh, dash and bash
+make test     # 107 assertions across sh, dash and bash
 make lint     # shellcheck
-make deb      # build a .deb (needs fpm)
-make rpm      # build an .rpm (needs fpm)
-make packages # build both in Docker, no local toolchain needed
+make deb      # build .deb (requires fpm)
+make rpm      # build .rpm (requires fpm)
+make packages # build both in Docker
 ```
 
-Tests run the handler in `--dry-run` mode and assert on the payload, so they
-need no network and no incident.io account.
+Tests run the handler in `--dry-run` and assert on the resulting payload. No
+network access or incident.io account required.
 
-## Uninstall
+## Uninstallation
 
 ```sh
-sudo make uninstall        # or apt remove / rpm -e
+sudo make uninstall          # or apt remove / rpm -e
 sudo rm /etc/icinga2/conf.d/incident-io-secrets.conf
 sudo icinga2 daemon -C && sudo systemctl reload icinga2
 ```
 
 ## Support
 
-Bugs and feature requests: [open an issue](https://github.com/incident-io/icinga2/issues).
+Issues and feature requests:
+[github.com/incident-io/icinga2/issues](https://github.com/incident-io/icinga2/issues).
 
-For help with your incident.io account, contact support@incident.io.
+Account support: support@incident.io.
 
-## License
+## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

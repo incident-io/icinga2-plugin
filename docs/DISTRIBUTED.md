@@ -12,18 +12,18 @@ So:
 
 - Install the package on **every master in the master zone**. Nothing on
   satellites, nothing on agents.
-- Only the masters need egress to `api.incident.io` on port 443. Satellites in
-  remote datacenters do not — usually the thing your network team wants to know.
+- Only the masters need egress to `api.incident.io` on port 443. Satellites do
+  not.
 
-## The trap: zone sync does not move the handler
+## Zone sync does not distribute the handler
 
 Icinga's config sync distributes `.conf` files to the nodes in a zone. It does
 not distribute anything else. The handler at `/usr/bin/incident-io-icinga` is a
 binary as far as Icinga is concerned, so it will not be synced.
 
-Install the package on each master via your config management. The failure mode
-if you forget is nasty and delayed: everything works until the day the other
-master takes over notifications, and then alerts silently stop.
+Install the package on each master via your config management. If one master is
+missed, notifications succeed until that master takes over, then fail silently
+from Icinga's perspective — the failure surfaces only in syslog.
 
 Check both masters:
 
@@ -48,8 +48,7 @@ incident.io.
 
 `$service.check_source$` names the endpoint that actually executed the check,
 which in a distributed setup is the satellite. It lands in metadata as
-`check_source`, and it is the natural field to route on when satellites map to
-datacenters:
+`check_source`. Where satellites map to datacenters, route on it:
 
 ```
 check_source = satellite-fra-1  ->  EU on-call
@@ -65,9 +64,8 @@ Config sync is TLS-encrypted, but it also writes synced files to
 `/var/lib/icinga2/api/zones/` on every node in the zone. Keeping the token in
 `conf.d` means it never enters the sync path at all.
 
-## Satellite-only estates
+## Satellites running their own notification component
 
-If you have satellites that run their own notification component — an unusual
-setup, but it exists where datacenters must alert independently of the masters —
-install the package there too and put the `.conf` files in that satellite's zone
-directory. Everything else works the same.
+Where satellites are configured to notify independently of the masters, install
+the package on those satellites and place the `.conf` files in the relevant
+zone directory. Behaviour is otherwise identical.

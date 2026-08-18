@@ -4,8 +4,7 @@
 #
 # Part of https://github.com/incident-io/icinga2
 #
-# Dependencies: POSIX sh, sed, tr, curl, mktemp. Deliberately no jq, perl or
-# python - Icinga masters in locked-down estates often have none of them.
+# Dependencies: POSIX sh, sed, tr, curl, mktemp.
 #
 # Invoked by the "incident-io" NotificationCommand; all input arrives as
 # environment variables. See conf.d/incident-io-command.conf.
@@ -14,7 +13,7 @@
 
 set -eu
 
-VERSION="1.0.0"
+VERSION="0.1.0"
 LOG_TAG="incident-io-icinga"
 
 usage() {
@@ -76,8 +75,8 @@ die() { log err "$*"; exit "${2:-1}"; }
 #   3. escape backslash first, then double quote - order matters
 #   4. fold onto one line, real newlines becoming \n
 #
-# Icinga plugin output routinely contains quotes, Windows paths and multi-line
-# perfdata, so every step here earns its keep.
+# Plugin output may contain quotes, backslashes and newlines, all of which are
+# invalid unescaped inside a JSON string.
 # ---------------------------------------------------------------------------
 json_escape() {
   printf '%s' "${1:-}" \

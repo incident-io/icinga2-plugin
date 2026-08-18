@@ -22,9 +22,9 @@ Without configuring anything:
 | `servicegroups` | `["disk"]` | `service.groups`, service alerts only |
 | `source` | `icinga` | constant |
 
-`check_source` is the one people overlook. In a distributed setup it names the
-satellite that executed the check, which usually maps to a datacenter or
-region — it is the single most useful field for routing.
+In a distributed setup `check_source` names the satellite that executed the
+check. Where satellites are deployed per datacenter, this is the field to route
+on.
 
 ## Adding your own
 
@@ -57,9 +57,9 @@ Produces:
 }
 ```
 
-This is an allowlist on purpose. Check commands often keep credentials in custom
-vars (`vars.mysql_password` and friends), so nothing is exported unless you name
-it.
+This is an allowlist, not a dump of all custom variables. Custom variables can
+hold check credentials (`vars.mysql_password`), so nothing is exported unless
+explicitly named.
 
 ### Option 2: an explicit dictionary
 
@@ -136,12 +136,10 @@ Later layers overwrite earlier ones on key collision:
 5. service `vars.incident_io_metadata_vars`
 6. service `vars.incident_io_metadata`
 
-So a service can override a host default, and either can override a built-in —
-handy if you want `source` to read `icinga-eu` rather than `icinga`.
+A service can therefore override a host default, and either can override a
+built-in field.
 
 ## How this works
-
-Worth understanding, because it explains the one real constraint.
 
 `incident-io-command.conf` defines a function, `incident_io_metadata()`, which
 assembles a dictionary and hands it to Icinga's built-in
@@ -150,14 +148,12 @@ The result is passed to the handler as one environment variable,
 `INCIDENT_IO_METADATA_JSON`.
 
 Because Icinga has already produced valid JSON, the handler splices it into the
-payload verbatim rather than parsing it. That is what makes arbitrary nesting
-possible in a script with no JSON library — the JSON was built by Icinga, not by
-the shell.
+payload verbatim rather than parsing it. Arbitrary nesting therefore works
+without a JSON library in the shell.
 
-The constraint that falls out: the handler validates only the *shape* (it must
-be a JSON object, under 32 KB). If it isn't, the handler logs a warning and
-sends the alert without your extra metadata rather than dropping the alert. An
-alert with thin metadata beats no alert.
+The handler validates only the shape: the value must be a JSON object under
+32 KB. If it is not, the handler logs a warning and sends the alert without the
+additional metadata rather than failing the alert.
 
 ## Checking your work
 
