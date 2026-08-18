@@ -16,6 +16,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `urlencode` passed an empty string as curl's URL argument, which curl 8
   rejects. Encodes against a dummy host and strips it back off.
 
+### Verified
+
+- Request schema checked against the incident.io OpenAPI specification for
+  `POST /v2/alert_events/http/{alert_source_config_id}`: `title` and `status`
+  are the only required fields, `status` is an enum of `firing` and `resolved`,
+  and `metadata` is a free-form object. All fields sent by the handler match.
+
 ### Changed
 
 - Config now installs to `/etc/icinga2/conf.d/` rather than

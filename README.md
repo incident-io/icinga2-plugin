@@ -4,11 +4,11 @@ Sends Icinga 2 host and service notifications to an incident.io HTTP alert
 source, and resolves them on recovery.
 
 > [!WARNING]
-> **Beta.** This has not been validated against a production Icinga 2
-> deployment. Specifically: the DSL in `conf.d/` has never been evaluated by a
-> live master, and the request schema has not been checked against the current
-> incident.io alert events API. Interfaces may change before 1.0. Test in a
-> non-production zone first.
+> **Beta.** The Icinga configuration in `conf.d/` has not yet been evaluated by
+> a live Icinga 2 master — `icinga2 daemon -C` is the first thing to run after
+> installing. The handler and its payload are well covered by tests, and the
+> request schema is verified against the incident.io alert events API, but the
+> DSL is not. Test in a non-production zone first.
 
 ## Requirements
 
