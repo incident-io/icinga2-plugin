@@ -213,7 +213,7 @@ Director cannot own the notification command itself. The integration passes its
 configuration through the command's `env` block, and setting `env` from Director
 has been [an open feature
 request](https://github.com/Icinga/icingaweb2-module-director/issues/256) since
-2016. Tracked in [#3](https://github.com/incident-io/icinga2-plugin/issues/3).
+2016.
 
 > [!NOTE]
 > One thing we have not been able to verify: whether an apply rule in `conf.d`
