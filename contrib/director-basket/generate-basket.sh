@@ -1,71 +1,44 @@
 #!/bin/sh
 #
-# Emit an Icinga Director "configuration basket" for the incident.io
-# integration, so Director users can import the command, contact and
-# notification template through the web UI instead of editing files.
+# Emit an Icinga Director "configuration basket" carrying the two custom
+# variable fields this integration reads, so that hosts and services managed in
+# Director can be opted in from the web UI instead of by editing files.
 #
 #   ./contrib/director-basket/generate-basket.sh > director-basket.json
 #
 # Import with:  Director -> Configuration Baskets -> Upload
 #           or: icingacli director basket restore < director-basket.json
 #
-# The file layout follows Director's basket schema and has been exercised
-# against Director 1.10. Please open an issue if your Director version rejects
-# it.
+# Deliberately just the data fields.
 #
-# NOTE: Director cannot install the handler binary. Install the package on
-# every master first - this basket only creates the Icinga objects.
+# The NotificationCommand, the User, the notification template and the apply
+# rules all come from the package, in /etc/icinga2/conf.d/, and a Director site
+# gets them the same way everyone else does. Director cannot own the command
+# regardless: the integration passes its configuration through the command's
+# env block, and setting env from Director has been an open feature request
+# since 2016 (Icinga/icingaweb2-module-director#256). An earlier version of this
+# basket shipped its own copies of those four objects, which duplicated working
+# configuration with versions that could not work.
+#
+# So the only thing Director is genuinely needed for is setting
+# vars.incident_io on the host and service objects it owns, which is what these
+# fields are for. After importing, add them to the host and service templates
+# you want to be able to opt in.
+#
+# NOT VERIFIED: whether an apply rule in conf.d reliably matches hosts that
+# Director writes into zones.d. Notifications fire from the master zone so it
+# should, but Director builds its own config stage and there are reported cases
+# of zone handling going wrong when an apply rule and its target are split
+# across the two. Confirm on your own Director with:
+#
+#   icinga2 object list --type Notification --name 'incident-io*'
+#
+# after ticking the box on one host. Please open an issue either way.
 
 set -eu
 
 cat <<'JSON'
 {
-  "Command": {
-    "incident-io": {
-      "command": "/usr/bin/incident-io-icinga",
-      "methods_execute": "PluginNotification",
-      "object_name": "incident-io",
-      "object_type": "object",
-      "vars": {
-        "incident_io_url": "${incident_io_url}",
-        "incident_io_token": "${incident_io_token}",
-        "incident_io_icingaweb_url": "${incident_io_icingaweb_url}"
-      }
-    }
-  },
-  "NotificationTemplate": {
-    "incident-io-notification": {
-      "command": "incident-io",
-      "notification_interval": 3600,
-      "object_name": "incident-io-notification",
-      "object_type": "template",
-      "states": [ "Warning", "Critical", "Unknown", "OK" ],
-      "types": [
-        "Problem", "Recovery", "Acknowledgement", "Custom",
-        "FlappingStart", "FlappingEnd",
-        "DowntimeStart", "DowntimeEnd", "DowntimeRemoved"
-      ],
-      "users": [ "incident-io" ]
-    }
-  },
-  "User": {
-    "incident-io": {
-      "display_name": "incident.io",
-      "enable_notifications": true,
-      "object_name": "incident-io",
-      "object_type": "object"
-    }
-  },
-  "DataList": {
-    "incident.io alert routing": {
-      "list_name": "incident.io alert routing",
-      "owner": "icinga2-incident-io",
-      "entries": [
-        { "entry_name": "true",  "entry_value": "Send to incident.io" },
-        { "entry_name": "false", "entry_value": "Do not send to incident.io" }
-      ]
-    }
-  },
   "Datafield": {
     "1": {
       "varname": "incident_io",

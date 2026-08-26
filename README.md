@@ -193,18 +193,35 @@ See [docs/METADATA.md](docs/METADATA.md).
 
 ## Icinga Director
 
-`contrib/director-basket/` generates an importable basket for sites managing
-Icinga through Director:
+Install the package exactly as above. Director-managed sites are not a special
+case: the command, the contact, the notification template and the apply rules
+all come from `conf.d` on each master, and Director's own configuration is
+untouched.
+
+What Director does own is your host and service objects, so it needs a way to
+set `vars.incident_io` on them. `contrib/director-basket/` generates a basket
+carrying those two custom variable fields:
 
 ```sh
 make basket
 ```
 
-Import via **Director → Configuration Baskets → Upload**. The basket creates
-Icinga objects only; the package must still be installed on each master.
+Import via **Director → Configuration Baskets → Upload**, then add the fields
+to the host and service templates you want to be able to opt in.
 
-Exercised against Director 1.10. If your Director version rejects the basket,
-open an issue.
+Director cannot own the notification command itself. The integration passes its
+configuration through the command's `env` block, and setting `env` from Director
+has been [an open feature
+request](https://github.com/Icinga/icingaweb2-module-director/issues/256) since
+2016. Tracked in [#3](https://github.com/incident-io/icinga2-plugin/issues/3).
+
+> [!NOTE]
+> One thing we have not been able to verify: whether an apply rule in `conf.d`
+> reliably matches hosts that Director writes into `zones.d`. Notifications fire
+> from the master zone so it should, but Director builds its own configuration
+> stage. After opting in one host, confirm with
+> `icinga2 object list --type Notification --name 'incident-io*'`, and please
+> open an issue either way.
 
 ## Development
 
