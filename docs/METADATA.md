@@ -86,7 +86,7 @@ vars.incident_io_metadata = {
   owner = {
     squad   = "core-infra"
     slack   = "#core-infra"
-    manager = "rloffelmacher"
+    manager = "ed-amame"
   }
   compliance = [ "pci", "sox" ]
 }

@@ -75,6 +75,7 @@ rpm:
 	sh ./build-linux/make_package.sh rpm
 
 basket:
+	@mkdir -p dist
 	sh ./contrib/director-basket/generate-basket.sh > dist/director-basket.json
 	@echo "wrote dist/director-basket.json"
 

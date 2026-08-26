@@ -3,24 +3,17 @@
 Sends Icinga 2 host and service notifications to an incident.io HTTP alert
 source, and resolves them on recovery.
 
-> [!WARNING]
-> **Beta.** The configuration in `conf.d/` is now exercised end to end against a
-> single-node Icinga 2.16.5: it passes `icinga2 daemon -C`, generates the
-> expected `Notification` objects, and delivers PROBLEM and RECOVERY alerts
-> carrying the metadata the objects were configured with. It also parses on
-> 2.12.12. What has *not* been verified is distributed operation: satellite
-> `check_source` values, zone config sync, and notification failover between HA
-> masters. Test in a non-production zone first.
-
 ## Requirements
 
 | | |
 | --- | --- |
 | Icinga 2 | 2.11 or newer |
-| On each master | POSIX `/bin/sh`, `curl`, `sed`, `awk`, `tr` |
+| On each master | POSIX `/bin/sh`, `curl`, `sed`, `awk`, `tr`, `od`, `mktemp` |
 | Network | outbound HTTPS from each master to `api.incident.io` |
+| Optional | `logger`, to send handler output to syslog |
 
-No `jq`, Perl or Python dependency.
+Everything but `curl` is in the base install of any Linux distribution. There is
+no `jq`, Perl or Python dependency.
 
 ## How it works
 
@@ -94,7 +87,14 @@ sudoedit /etc/icinga2/conf.d/incident-io-secrets.conf
 const IncidentIoUrl          = "https://api.incident.io/v2/alert_events/http/SOURCE_ID"
 const IncidentIoToken        = "TOKEN"
 const IncidentIoIcingaWebUrl = "https://icinga.example.com/icingaweb2"
+
+globals.IncidentIoIcingaWebStyle = "icingadb"   // or "monitoring"
 ```
+
+`IncidentIoIcingaWebStyle` decides which Icinga Web 2 front end the `source_url`
+on each alert points at: `icingadb` for Icinga DB Web, the current default, or
+`monitoring` for the older monitoring module. Open a host in Icinga Web 2 and
+look at the URL if you are unsure. Leave it out and you get `icingadb`.
 
 Everything installs to `conf.d`, on every master, rather than being distributed
 by zone sync from `zones.d`. Constants defined in `conf.d` are not visible to
@@ -141,6 +141,11 @@ Handler output goes to syslog under the tag `incident-io-icinga`. Exit codes:
 `0` delivered, `1` delivery failed, `2` configuration error. See
 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
+As with any change to notification routing, we recommend opting in a handful of
+objects, or a non-production zone, and watching the alerts arrive before you
+enable it across the estate. The `vars.incident_io` opt-in is designed to make
+that easy.
+
 ## Payload
 
 ```json
@@ -157,6 +162,7 @@ Handler output goes to syslog under the tag `incident-io-icinga`. Exit codes:
     "notification_type": "PROBLEM",
     "check_source": "satellite-fra-1",
     "hostgroups": ["linux", "prod"],
+    "servicegroups": ["disk"],
     "source": "icinga"
   }
 }
@@ -197,12 +203,13 @@ make basket
 Import via **Director → Configuration Baskets → Upload**. The basket creates
 Icinga objects only; the package must still be installed on each master.
 
-Community-supported and exercised against Director 1.10 only.
+Exercised against Director 1.10. If your Director version rejects the basket,
+open an issue.
 
 ## Development
 
 ```sh
-make test     # 122 assertions across sh, dash, bash and ksh
+make test     # run the test suite across sh, dash and bash
 make lint     # shellcheck
 make deb      # build .deb (requires fpm)
 make rpm      # build .rpm (requires fpm)
