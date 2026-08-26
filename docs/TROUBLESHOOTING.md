@@ -38,18 +38,18 @@ grep incident-io-icinga /var/log/syslog | tail -50
 | 1 | Delivery failed — network, timeout or a 5xx from incident.io |
 | 2 | Configuration error — missing env, bad argument, or a 401/403 |
 
-**4. Test the path by hand, as the icinga user**
+**4. Test the path by hand, as the user Icinga runs as**
 
 ```
-sudo -u nagios env \
+sudo -u icinga env \
   INCIDENT_IO_URL="$(...)" INCIDENT_IO_TOKEN="$(...)" \
   HOST_NAME=test-host STATE=CRITICAL NOTIFICATION_TYPE=PROBLEM \
   OUTPUT='manual test' \
   /usr/bin/incident-io-icinga
 ```
 
-(The Icinga user is `nagios` on RHEL-family, `nagios` or `icinga` on Debian —
-check `systemctl show icinga2 -p User`.)
+Icinga 2 runs as `icinga` on both Debian and RHEL families. Confirm with
+`systemctl show icinga2 -p User` before you run this.
 
 ## `could not reach ... check egress from this master`
 
@@ -71,6 +71,20 @@ env = {
 The token does not match the alert source. The URL contains the alert source ID
 and the token is scoped to it, so a URL and token taken from different sources
 will fail this way. Re-copy both from the same source in incident.io.
+
+## `source_url` on the alert leads to a 404
+
+The link is built for one of two Icinga Web 2 front ends, and the wrong one was
+selected. Icinga DB Web serves objects under `/icingadb/`, the older monitoring
+module under `/monitoring/`. Open a host in Icinga Web 2, look at the path in
+your browser, and set the matching value in `incident-io-secrets.conf`:
+
+```
+globals.IncidentIoIcingaWebStyle = "icingadb"     // or "monitoring"
+```
+
+Omitting the setting means `icingadb`. If `source_url` is empty rather than
+wrong, `IncidentIoIcingaWebUrl` is unset.
 
 ## Alerts fire but never resolve
 
@@ -111,7 +125,8 @@ icinga2 console --connect 'https://myuser:mypass@localhost:5665/'
 `--connect` is required: a bare `icinga2 console` does not load your
 configuration, so the function is undefined there and you get `Argument is not a
 callable object` rather than an answer. It needs the `api` feature enabled and
-an `ApiUser` with the `console` permission.
+an `ApiUser` with the `console` permission. Credentials given this way are
+recorded in your shell history.
 
 If that looks right but alerts lack the fields, look for a warning in syslog —
 the handler drops malformed or oversized metadata (over 32 KB) rather than
