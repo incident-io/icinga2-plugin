@@ -1,7 +1,7 @@
 # incident.io for Icinga 2
 
-Sends Icinga 2 host and service notifications to an incident.io HTTP alert
-source, and resolves them on recovery.
+Sends Icinga 2 host and service notifications to an incident.io alert source,
+and resolves them on recovery.
 
 ## Requirements
 
@@ -41,10 +41,10 @@ Install on every master in the master zone. Icinga's config sync distributes
 
 ```sh
 # Debian / Ubuntu
-sudo apt install ./icinga2-incident-io_0.1.0_all.deb
+sudo apt install ./icinga2-incident-io_*_all.deb
 
 # RHEL / Rocky / SLES
-sudo rpm -i icinga2-incident-io-0.1.0-1.noarch.rpm
+sudo rpm -i icinga2-incident-io-*.noarch.rpm
 ```
 
 **Source:**
@@ -68,8 +68,13 @@ Installed files:
 
 ### 1. Create an alert source
 
-In incident.io: **Settings → Alerts → Sources → New source → HTTP.** Note the
-URL and bearer token.
+In incident.io: **Settings → Alerts → Sources → New source**, then search for
+**Icinga 2**. Note the URL and bearer token it gives you. That page also carries
+a short version of the steps below, if you would rather not leave the dashboard.
+
+On an account that predates the Icinga 2 source type, create an **HTTP** source
+instead. Everything else is identical: the handler sends the same payload either
+way.
 
 ### 2. Add credentials
 
@@ -84,7 +89,7 @@ sudoedit /etc/icinga2/conf.d/incident-io-secrets.conf
 ```
 
 ```
-const IncidentIoUrl          = "https://api.incident.io/v2/alert_events/http/SOURCE_ID"
+const IncidentIoUrl          = "https://api.incident.io/v2/alert_events/icinga2/SOURCE_ID"
 const IncidentIoToken        = "TOKEN"
 const IncidentIoIcingaWebUrl = "https://icinga.example.com/icingaweb2"
 
