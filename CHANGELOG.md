@@ -18,6 +18,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   configuration error.
 - `SECURITY.md` and `CONTRIBUTING.md`.
 
+### Changed
+
+- The Icinga Director basket now carries only the two custom variable fields,
+  `incident_io` and `incident_io_metadata`. It previously shipped its own
+  `Command`, `User` and `NotificationTemplate`, duplicating objects the package
+  already installs to `conf.d` with versions that could not work: the command
+  had no `env` block, so nothing reached the handler, and no notification was
+  ever applied to a host or service. Director cannot set `env` on a command at
+  all, so those objects were never going to be Director's to own. Setting
+  `vars.incident_io` on Director-managed objects is the one thing Director is
+  needed for, and that is what the fields do. The orphaned `DataList` is gone
+  too; the boolean field never referenced it.
+
 ### Fixed
 
 - `make basket` failed on a clean checkout, redirecting into a `dist/` directory
