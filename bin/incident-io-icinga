@@ -2,7 +2,7 @@
 #
 # incident-io-icinga - forward Icinga 2 notifications to an incident.io alert source
 #
-# Part of https://github.com/incident-io/icinga2
+# Part of https://github.com/incident-io/icinga2-plugin
 #
 # Dependencies: POSIX sh, sed, tr, awk, od, curl, mktemp.
 #
@@ -13,7 +13,7 @@
 
 set -eu
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 LOG_TAG="incident-io-icinga"
 
 usage() {

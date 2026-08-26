@@ -47,7 +47,7 @@ fpm -s dir -t "$TYPE" \
   -n icinga2-incident-io \
   -v "$VERSION" \
   --description "Forward Icinga 2 notifications to incident.io" \
-  --url "https://github.com/incident-io/icinga2" \
+  --url "https://github.com/incident-io/icinga2-plugin" \
   --maintainer "incident.io <support@incident.io>" \
   --license "MIT" \
   --architecture all \
