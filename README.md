@@ -50,8 +50,8 @@ sudo rpm -i icinga2-incident-io-0.1.0-1.noarch.rpm
 **Source:**
 
 ```sh
-git clone https://github.com/incident-io/icinga2.git
-cd icinga2
+git clone https://github.com/incident-io/icinga2-plugin.git
+cd icinga2-plugin
 sudo make install
 ```
 
@@ -229,7 +229,7 @@ sudo icinga2 daemon -C && sudo systemctl reload icinga2
 ## Support
 
 Issues and feature requests:
-[github.com/incident-io/icinga2/issues](https://github.com/incident-io/icinga2/issues).
+[github.com/incident-io/icinga2-plugin/issues](https://github.com/incident-io/icinga2-plugin/issues).
 
 Account support: support@incident.io.
 

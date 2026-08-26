@@ -26,6 +26,18 @@ jobs:
           done
           exit $missing
 
+      # The handler carries its own version string, which it prints for
+      # --version and sends as a User-Agent. Only the VERSION file is checked
+      # against the tag, so nothing else would notice the two drifting apart.
+      - name: Handler version matches the VERSION file
+        run: |
+          file=$(cat VERSION)
+          handler=$(./bin/incident-io-icinga --version)
+          if [ "$file" != "$handler" ]; then
+            echo "VERSION says $file, handler reports $handler" >&2
+            exit 1
+          fi
+
       - name: Shellcheck
         run: make lint
 

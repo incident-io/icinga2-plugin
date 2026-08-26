@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
 ### Added
 
 - `IncidentIoIcingaWebStyle` selects the Icinga Web 2 front end that `source_url`
@@ -24,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Icinga 2 runs as `icinga` on both Debian and RHEL families.
 - The example payload in the README omitted `servicegroups`, which service
   alerts do carry.
+- Repository URLs still pointed at `incident-io/icinga2`, including the
+  `Homepage` field baked into every package.
+- CI now checks that the version the handler reports matches the `VERSION`
+  file. Only the file was checked against the tag, so a release could ship
+  packages built as 0.2.0 whose `--version` and User-Agent still said 0.1.0.
 
 ## [0.1.0] - 2026-08-18
 
