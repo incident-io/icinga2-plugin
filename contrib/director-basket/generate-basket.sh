@@ -9,9 +9,9 @@
 # Import with:  Director -> Configuration Baskets -> Upload
 #           or: icingacli director basket restore < director-basket.json
 #
-# STATUS: contrib, community-supported. The file layout follows Director's
-# basket schema but has been exercised against Director 1.10 only. Please open
-# an issue if your Director version rejects it.
+# The file layout follows Director's basket schema and has been exercised
+# against Director 1.10. Please open an issue if your Director version rejects
+# it.
 #
 # NOTE: Director cannot install the handler binary. Install the package on
 # every master first - this basket only creates the Icinga objects.
