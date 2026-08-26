@@ -37,6 +37,7 @@ Environment (set by the NotificationCommand):
   NOTIFICATION_COMMENT        Comment on ack/custom notification
   INCIDENT_IO_METADATA_JSON   JSON object merged into "metadata"
   ICINGAWEB_URL               Icinga Web 2 base URL, for source_url
+  ICINGAWEB_STYLE             icingadb (default) or monitoring
 USAGE
 }
 
@@ -146,13 +147,38 @@ else
   DEDUP="icinga/${HOST_NAME}/_host"
 fi
 
+# Two generations of Icinga Web 2 front end address objects differently, and
+# which one a site runs is not discoverable from here. ICINGAWEB_STYLE picks:
+#
+#   icingadb    Icinga DB Web, the current default front end (Icinga 2.13+)
+#   monitoring  the older "monitoring" module, still in use on estates that
+#               have not migrated to Icinga DB
+#
+# An unrecognised value falls back to icingadb rather than dropping the link.
 SOURCE_URL=""
 if [ -n "${ICINGAWEB_URL:-}" ]; then
   BASE=$(printf '%s' "$ICINGAWEB_URL" | sed -e 's|/*$||')
-  if [ -n "${SERVICE_NAME:-}" ]; then
-    SOURCE_URL="${BASE}/icingadb/service?name=$(urlencode "$SERVICE_NAME")&host.name=$(urlencode "$HOST_NAME")"
+
+  STYLE="${ICINGAWEB_STYLE:-icingadb}"
+  case "$STYLE" in
+    icingadb|monitoring) ;;
+    *)
+      log warning "unrecognised ICINGAWEB_STYLE '${STYLE}', using icingadb"
+      STYLE="icingadb" ;;
+  esac
+
+  if [ "$STYLE" = "monitoring" ]; then
+    if [ -n "${SERVICE_NAME:-}" ]; then
+      SOURCE_URL="${BASE}/monitoring/service/show?host=$(urlencode "$HOST_NAME")&service=$(urlencode "$SERVICE_NAME")"
+    else
+      SOURCE_URL="${BASE}/monitoring/host/show?host=$(urlencode "$HOST_NAME")"
+    fi
   else
-    SOURCE_URL="${BASE}/icingadb/host?name=$(urlencode "$HOST_NAME")"
+    if [ -n "${SERVICE_NAME:-}" ]; then
+      SOURCE_URL="${BASE}/icingadb/service?name=$(urlencode "$SERVICE_NAME")&host.name=$(urlencode "$HOST_NAME")"
+    else
+      SOURCE_URL="${BASE}/icingadb/host?name=$(urlencode "$HOST_NAME")"
+    fi
   fi
 fi
 

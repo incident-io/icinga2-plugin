@@ -157,6 +157,39 @@ line two
     NOTIFICATION_TYPE=PROBLEM OUTPUT=x "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'source_url empty without base' "d['source_url']" ''
 
+  PAYLOAD=$(env -u SERVICE_NAME HOST_NAME='web-01' STATE=DOWN \
+    NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
+    ICINGAWEB_URL='https://icinga.example.com/icingaweb2' \
+    "$SH" "$HANDLER" --dry-run)
+  assert "$SH" 'source_url host, icingadb default' "d['source_url']" \
+    'https://icinga.example.com/icingaweb2/icingadb/host?name=web-01'
+
+  # -- 8b. the older "monitoring" module addresses objects differently -----
+  PAYLOAD=$(env HOST_NAME='web 01' SERVICE_NAME='disk /' STATE=CRITICAL \
+    NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
+    ICINGAWEB_URL='https://icinga.example.com/icingaweb2/' \
+    ICINGAWEB_STYLE='monitoring' \
+    "$SH" "$HANDLER" --dry-run)
+  assert "$SH" 'source_url service, monitoring module' "d['source_url']" \
+    'https://icinga.example.com/icingaweb2/monitoring/service/show?host=web%2001&service=disk%20%2F'
+
+  PAYLOAD=$(env -u SERVICE_NAME HOST_NAME='web-01' STATE=DOWN \
+    NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
+    ICINGAWEB_URL='https://icinga.example.com/icingaweb2' \
+    ICINGAWEB_STYLE='monitoring' \
+    "$SH" "$HANDLER" --dry-run)
+  assert "$SH" 'source_url host, monitoring module' "d['source_url']" \
+    'https://icinga.example.com/icingaweb2/monitoring/host/show?host=web-01'
+
+  # An unrecognised style falls back rather than dropping the link entirely.
+  PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
+    NOTIFICATION_TYPE=PROBLEM OUTPUT=x \
+    ICINGAWEB_URL='https://icinga.example.com/icingaweb2' \
+    ICINGAWEB_STYLE='nonsense' \
+    "$SH" "$HANDLER" --dry-run 2>/dev/null)
+  assert "$SH" 'unknown style falls back to icingadb' "d['source_url']" \
+    'https://icinga.example.com/icingaweb2/icingadb/service?name=s&host.name=h'
+
   # -- 9. single-line values survive escaping -----------------------------
   #
   # Regression: the previous json_escape ended with a `sed -e ':a' -e 'N'`
@@ -173,7 +206,7 @@ line two
 
   # -- 10. acknowledgement comment ---------------------------------------
   PAYLOAD=$(env HOST_NAME=h SERVICE_NAME=s STATE=CRITICAL \
-    NOTIFICATION_TYPE=ACKNOWLEDGEMENT NOTIFICATION_AUTHOR=rloffelmacher \
+    NOTIFICATION_TYPE=ACKNOWLEDGEMENT NOTIFICATION_AUTHOR=ed-amame \
     NOTIFICATION_COMMENT='looking into it' OUTPUT='CRITICAL - 100% packet loss' \
     "$SH" "$HANDLER" --dry-run)
   assert "$SH" 'ack comment appended' \
