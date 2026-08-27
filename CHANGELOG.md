@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The post-install message still called the alert source an HTTP source.
+
 ### Changed
 
 - Setup now points at the Icinga 2 alert source type in incident.io rather than

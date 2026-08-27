@@ -10,7 +10,7 @@ Next, on THIS master:
   1. cp /etc/icinga2/conf.d/incident-io-secrets.conf.example \
         /etc/icinga2/conf.d/incident-io-secrets.conf
   2. Edit it: set IncidentIoUrl and IncidentIoToken from your
-     incident.io HTTP alert source.
+     incident.io Icinga 2 alert source.
   3. chown root:icinga /etc/icinga2/conf.d/incident-io-secrets.conf
      chmod 0640        /etc/icinga2/conf.d/incident-io-secrets.conf
   4. icinga2 daemon -C && systemctl reload icinga2
